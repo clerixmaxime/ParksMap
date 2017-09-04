@@ -1,0 +1,221 @@
+kind: Template
+apiVersion: v1
+metadata:
+  annotations:
+    description: Parks Map Web
+    tags: parksmap, parksmap
+  name: parksmap
+parameters:
+- description: The name for the application.
+  name: APPLICATION_NAME
+  required: true
+  value: parksmap
+- description: The name for the application.
+  name: GIT_URL
+  required: true
+  value: https://github.com/clerixmaxime/ParksMap.git
+- description: The name for the application.
+  name: GIT_REF
+  required: false
+  value: master
+- description: The name for the application.
+  name: CONTEXT_DIR
+  required: false
+  value: parksmap-web
+- description: URL of the Maven mirror
+  name: MAVEN_MIRROR_URL
+  required: false
+- displayName: Github secret
+  from: '[a-zA-Z0-9]{8}'
+  generate: expression
+  name: GITHUB_SECRET
+- displayName: Generic secret
+  from: '[a-zA-Z0-9]{8}'
+  generate: expression
+  name: GENERIC_SECRET
+objects:
+- apiVersion: rbac.authorization.k8s.io/v1beta1
+  kind: RoleBinding
+  metadata:
+    name: view
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: view
+  subjects:
+    - kind: ServiceAccount
+      name: default
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      app: ${APPLICATION_NAME}
+      application: ${APPLICATION_NAME}
+      bundle: parksmap-app
+    name: ${APPLICATION_NAME}
+  spec: {}
+  status:
+      dockerImageRepository: ''
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    annotations:
+    labels:
+      app: ${APPLICATION_NAME}
+      bundle: parksmap-app
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    nodeSelector: null
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${APPLICATION_NAME}:latest
+    postCommit: {}
+    resources: {}
+    runPolicy: Serial
+    source:
+      contextDir: ${CONTEXT_DIR}
+      git:
+        ref: ${GIT_REF}
+        uri: ${GIT_URL}
+      type: Git
+    strategy:
+      sourceStrategy:
+        env:
+        - name: MAVEN_MIRROR_URL
+          value: ${MAVEN_MIRROR_URL}
+        forcePull: true
+        from:
+          kind: ImageStreamTag
+          name: redhat-openjdk18-openshift:1.1
+          namespace: openshift
+      type: Source
+    triggers:
+    - github:
+        secret: ${GITHUB_SECRET}
+      type: GitHub
+    - generic:
+        secret: ${GENERIC_SECRET}
+      type: Generic
+    - imageChange: {}
+      type: ImageChange
+    - type: ConfigChange
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: ${APPLICATION_NAME}
+      bundle: parksmap-app
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    replicas: 1
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}
+    strategy:
+      activeDeadlineSeconds: 21600
+      recreateParams:
+        post:
+          execNewPod:
+            command:
+            - curl
+            - http://${APPLICATION_NAME}:8080/ws/data/load
+            containerName: ${APPLICATION_NAME}
+          failurePolicy: Ignore
+        timeoutSeconds: 600
+      resources: {}
+      type: Recreate
+    template:
+      metadata:
+        labels:
+          app: ${APPLICATION_NAME}
+          bundle: parksmap-app
+          application: ${APPLICATION_NAME}
+          deploymentConfig: ${APPLICATION_NAME}
+        name: ${APPLICATION_NAME}
+      spec:
+        containers:
+        - image: ${APPLICATION_NAME}
+          imagePullPolicy: Always
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /ws/healthz/
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /ws/healthz/
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: ${APPLICATION_NAME}
+          ports:
+          - containerPort: 8778
+            name: jolokia
+            protocol: TCP
+          - containerPort: 8080
+            name: http
+            protocol: TCP
+          - containerPort: 8443
+            name: https
+            protocol: TCP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 75
+    triggers:
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${APPLICATION_NAME}
+        from:
+          kind: ImageStreamTag
+          name: ${APPLICATION_NAME}:latest
+      type: ImageChange
+    - type: ConfigChange
+- apiVersion: v1
+  kind: Route
+  metadata:
+    labels:
+      app: ${APPLICATION_NAME}
+      bundle: parksmap-app
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    to:
+      kind: Service
+      name: ${APPLICATION_NAME}
+      weight: 100
+    wildcardPolicy: None
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: ${APPLICATION_NAME}
+      bundle: parksmap-app
+      application: ${APPLICATION_NAME}
+      type: parksmap-backend
+    name: ${APPLICATION_NAME}
+  spec:
+    ports:
+    - port: 8080
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}
+    sessionAffinity: None
+    type: ClusterIP
