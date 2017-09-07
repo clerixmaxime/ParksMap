@@ -1,5 +1,5 @@
 node('maven') {
-
+    input 'wait'
     def version = getVersionFromPom("parksmap-web/pom.xml")
 
     stage ('Development - Build WAR') {
