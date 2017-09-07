@@ -75,11 +75,8 @@ objects:
     resources: {}
     runPolicy: Serial
     source:
-      contextDir: ${CONTEXT_DIR}
-      git:
-        ref: ${GIT_REF}
-        uri: ${GIT_URL}
-      type: Git
+      binary: {}
+      type: Binary
     strategy:
       sourceStrategy:
         env:

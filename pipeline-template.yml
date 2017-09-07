@@ -1,0 +1,32 @@
+kind: Template
+apiVersion: v1
+metadata:
+  annotations:
+    description: Template to deploy a pipeline with a jenkinsfile hosted on a Git repository.
+    tags: git, pipeline
+  name: git-pipeline
+parameters:
+- description: The pipeline name.
+  name: PIPELINE_NAME
+  required: true
+  value: parksmap
+- description: The Git URL of the repository hosting the pipeline jenkinsfile.
+  name: GIT_URL
+  required: true
+  value: https://github.com/clerixmaxime/ParksMap.git
+- description: Path in the repository to the jenkinsfile.
+  name: JENKINSFILE_PATH
+  required: true
+  value: "/parksmap-web/parksmap-jenkinsfile"
+objects:
+- kind: "BuildConfig"
+  apiVersion: "v1"
+  metadata:
+    name: "${PIPELINE_NAME}"
+  spec:
+    source:
+      git:
+        uri: "${GIT_URL}"
+    strategy:
+      jenkinsPipelineStrategy:
+        jenkinsfile: "${JENKINSFILE_PATH}"

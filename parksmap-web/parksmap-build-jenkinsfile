@@ -1,0 +1,46 @@
+node('maven') {
+
+    def version = getVersionFromPom("parksmap-web/pom.xml")
+
+    stage ('Development - Build WAR') {
+        echo "Building version ${version}"
+        git branch: 'master', url: 'http://gogs:3000/maxime/ParksMap.git'
+        sh "cd parksmap-web"
+        sh "mvn clean install -DskipTests=true"
+    }
+
+    stage ('Development - Tests') {
+        parallel (
+            'Unit Tests': {
+                sh "mvn test"
+                step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'])
+            },
+            'Static Code Analysis': {
+                sh "mvn jacoco:report sonar:sonar -Dsonar.host.url=http://sonarqube:9000 -DskipTests=true"
+            }
+        )
+    }
+
+    stage ('Development - Push artifact to Nexus') {
+        sh "mvn -s settings/user-settings.xml deploy -DskipTests=true"
+    }
+
+    stage ('Development - Build Docker Image') {
+        sh "oc start-build parksmap --from-dir=target --wait=true -n cicd-advanced-development"
+    }
+
+    stage ('Development - Deploy new Image (${version})') {
+        openshiftDeploy(namespace: 'cicd-advanced-development', deploymentConfig: 'parksmap')
+    }
+
+    stage ('Development - Tag image as TestReady') {
+        openshiftTag(namespace: 'cicd-advanced-development', sourceStream: 'parksmap', sourceTag: 'latest', destinationStream: 'parksmap', destinationTag: 'TestReady,${version}-buildNumber')
+    }
+    input 'wait'
+
+}
+
+def getVersionFromPom(pom) {
+  def matcher = readFile(pom) =~ '<version>(.+)</version>'
+  matcher ? matcher[0][1] : null
+}
