@@ -1,6 +1,4 @@
 node('maven') {
-    input 'wait'
-    def version = getVersionFromPom("parksmap-web/pom.xml")
 
     stage ('Development - Build WAR') {
         echo "Building version ${version}"
@@ -8,6 +6,8 @@ node('maven') {
         sh "cd parksmap-web"
         sh "mvn clean install -DskipTests=true"
     }
+
+    def version = getVersionFromPom("pom.xml")
 
     stage ('Development - Tests') {
         parallel (
