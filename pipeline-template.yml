@@ -29,4 +29,4 @@ objects:
         uri: "${GIT_URL}"
     strategy:
       jenkinsPipelineStrategy:
-        jenkinsfile: "${JENKINSFILE_PATH}"
+        jenkinsfilePath: "${JENKINSFILE_PATH}"
